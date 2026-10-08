@@ -1,155 +1,154 @@
 # switch-lan-play
 
-[![Chat en Discord](https://img.shields.io/badge/chat-en%20discord-7289da.svg)](https://discord.gg/zEMCu5n)
+[![Discord 聊天](https://img.shields.io/badge/chat-en%20discord-7289da.svg)](https://discord.gg/zEMCu5n)
 
-Juega con tus amigos en modo multijugador local a traves de internet — directamente desde tu Nintendo Switch, sin PC.
-
----
-
-## Tabla de contenidos
-
-1. [Como funciona?](#como-funciona)
-2. [Instalacion rapida](#instalacion-rapida)
-3. [Componentes del proyecto](#componentes-del-proyecto)
-4. [Servidor relay](#servidor-relay)
-5. [Herramientas de desarrollo](#herramientas-de-desarrollo)
-6. [Compilacion desde fuente](#compilacion-desde-fuente)
-7. [Configuracion avanzada](#configuracion-avanzada)
-8. [Protocolo](#protocolo)
-9. [Solucion de problemas](#solucion-de-problemas)
+无需电脑，直接在 Nintendo Switch 上通过互联网与朋友游玩本地多人游戏。
 
 ---
 
-## Como funciona?
+## 目录
 
-El proyecto combina **dos sysmodules** que trabajan juntos en la Switch:
-
-```
-Switch (juego en modo "inalambrico local")
-    |
-    v
-ldn_mitm (Title ID: 4200000000000010)
-    |  Intercepta el servicio LDN de Nintendo y lo convierte
-    |  en paquetes UDP/TCP LAN en el puerto 11452
-    |
-    v
-sysmodule lan-play (Title ID: 42000000000000B1)
-    |  LDN Bridge: captura trafico del puerto 11452,
-    |  reescribe IPs (ALG) y lo envia al relay
-    |
-    v  UDP sobre WiFi
-Servidor relay (puerto 11451)
-    |
-    v
-Otros jugadores (Switch / PC / Emulador)
-```
-
-### Flujo de datos
-
-1. **ldn_mitm** intercepta las llamadas LDN del juego y las convierte en UDP broadcast local (puerto 11452)
-2. **sysmodule lan-play** captura esos paquetes en el puerto bridge (11453), reescribe las IPs WiFi reales por IPs virtuales `10.13.x.x`, y los envia al relay
-3. Los paquetes del relay se inyectan de vuelta a ldn_mitm via `127.0.0.1:11452` (loopback, compatible con Horizon OS)
-4. **TCP proxy** en el puerto 11453 maneja las conexiones Station->AccessPoint a traves del relay
-
-### Que juegos son compatibles?
-
-- **Juegos con "modo LAN" oficial** (ej: Mario Kart 8 DX con L+R+L-Stick): funcionan directamente
-- **Juegos solo con "inalambrico local"** (ej: Super Smash Bros, Pokemon, Animal Crossing): funcionan gracias a ldn_mitm que convierte wireless-local -> LAN
-
-Cada Switch obtiene automaticamente una **IP virtual unica** en el rango `10.13.0.0/16` calculada a partir del numero de serie del dispositivo.
+1. [工作原理](#工作原理)
+2. [快速安装](#快速安装)
+3. [项目组件](#项目组件)
+4. [中继服务器](#中继服务器)
+5. [开发工具](#开发工具)
+6. [从源码编译](#从源码编译)
+7. [高级配置](#高级配置)
+8. [协议](#协议)
+9. [故障排查](#故障排查)
 
 ---
 
-## Instalacion rapida
+## 工作原理
 
-> Requiere Nintendo Switch con **Atmosphere CFW >= 1.11.0** y conexion WiFi.
+本项目在 Switch 上配合使用**两个 sysmodule（系统模块）**：
 
-### Paso 1 — Descargar
-
-Descarga `switch-lan-play-all-in-one-v1.15.zip` desde [Releases](https://github.com/shaklinedj/switch-lan-play---5.5/releases).
-
-### Paso 2 — Copiar a la SD
-
-Extrae el zip en la **raiz de tu tarjeta SD**. La estructura resultante:
-
+```text
+Switch（游戏的“本地无线联机”模式）
+    |
+    v
+ldn_mitm（Title ID：4200000000000010）
+    |  拦截 Nintendo LDN 服务，将通信转换为
+    |  端口 11452 上的 LAN UDP/TCP 数据包
+    |
+    v
+lan-play sysmodule（Title ID：42000000000000B1）
+    |  LDN Bridge：捕获端口 11452 的流量，
+    |  重写 IP（ALG）并发送到中继服务器
+    |
+    v  WiFi 上的 UDP
+中继服务器（端口 11451）
+    |
+    v
+其他玩家（Switch / PC / 模拟器）
 ```
+
+### 数据流
+
+1. **ldn_mitm** 拦截游戏的 LDN 调用，将其转换为本地 UDP 广播（端口 11452）。
+2. **lan-play sysmodule** 在桥接端口 11453 捕获这些数据包，将实际 WiFi IP 重写为 `10.13.x.x` 虚拟 IP，再发送到中继服务器。
+3. 来自中继服务器的数据包通过 `127.0.0.1:11452` 注入回 ldn_mitm（使用 loopback，兼容 Horizon OS）。
+4. 端口 11453 上的 **TCP 代理**通过中继服务器处理 Station → Access Point 连接。
+
+### 支持哪些游戏？
+
+- **官方提供 LAN 模式的游戏**：例如《马力欧卡丁车 8 豪华版》（按 L + R + 左摇杆进入 LAN 模式），可直接使用。
+- **仅提供本地无线联机的游戏**：例如《任天堂明星大乱斗》《宝可梦》和《集合啦！动物森友会》，由 ldn_mitm 将本地无线通信转换为 LAN 通信。
+
+每台 Switch 都会根据设备序列号，自动获得 `10.13.0.0/16` 范围内的一个**唯一虚拟 IP**。
+
+---
+
+## 快速安装
+
+> 需要安装 **Atmosphere CFW ≥ 1.11.0** 的 Nintendo Switch，并连接 WiFi。
+
+### 第 1 步：下载
+
+从 [Releases](https://github.com/shaklinedj/switch-lan-play---5.5/releases) 下载 `switch-lan-play-all-in-one-v1.15.zip`。
+
+### 第 2 步：复制到 SD 卡
+
+将 ZIP 文件解压到 **SD 卡根目录**。解压后的目录结构如下：
+
+```text
 sdmc:/
 +-- atmosphere/
 |   +-- contents/
-|   |   +-- 4200000000000010/          <- ldn_mitm (intercepta LDN -> LAN)
+|   |   +-- 4200000000000010/          <- ldn_mitm（拦截 LDN → LAN）
 |   |   |   +-- exefs.nsp
 |   |   |   +-- flags/boot2.flag
 |   |   |   +-- toolbox.json
-|   |   +-- 42000000000000B1/          <- sysmodule lan-play (relay bridge)
+|   |   +-- 42000000000000B1/          <- lan-play sysmodule（中继桥接）
 |   |       +-- exefs.nsp
 |   |       +-- flags/boot2.flag
 |   |       +-- toolbox.json
 |   +-- hosts/
-|       +-- default.txt                <- DNS overrides (opcional)
+|       +-- default.txt                <- DNS 覆盖配置（可选）
 +-- switch/
     +-- .overlays/
-    |   +-- ldnmitm_config.ovl         <- overlay Tesla para ldn_mitm
+    |   +-- ldnmitm_config.ovl         <- ldn_mitm 的 Tesla 悬浮菜单
     +-- lan-play/
-    |   +-- lanplay-setup.nro           <- app configuradora
-    |   +-- lanplay-debug.nro           <- debug homebrew
-    |   +-- lanplay-sys-debug.nro       <- sysmodule debug
+    |   +-- lanplay-setup.nro           <- 配置应用
+    |   +-- lanplay-debug.nro           <- 自制程序调试工具
+    |   +-- lanplay-sys-debug.nro       <- sysmodule 调试工具
     +-- ldnmitm_config/
-        +-- ldnmitm_config.nro          <- config de ldn_mitm
+        +-- ldnmitm_config.nro          <- ldn_mitm 配置应用
 ```
 
-### Paso 3 — Configurar el servidor relay
+### 第 3 步：配置中继服务器
 
-1. Reinicia la Switch (ambos sysmodules arrancan automaticamente con `boot2.flag`)
-2. Abre **Homebrew Menu** -> lanza **"LanPlay Setup"**
-3. Pulsa **A**, escribe la direccion del relay (ej: `192.168.1.100:11451`) y pulsa **+**
-4. Reinicia la Switch
+1. 重启 Switch（两个 sysmodule 会通过 `boot2.flag` 自动启动）。
+2. 打开 **Homebrew Menu**，运行 **LanPlay Setup**。
+3. 按 **A**，输入中继服务器地址（例如 `192.168.1.100:11451`），再按 **+**。
+4. 重启 Switch。
 
-### Paso 4 — Jugar
+### 第 4 步：开始游戏
 
-1. Abre cualquier juego compatible
-2. Selecciona **"Juego inalambrico local"** (o modo LAN si el juego lo tiene)
-3. Los jugadores conectados al mismo relay se veran automaticamente!
+1. 打开支持的游戏。
+2. 选择**本地无线联机**（如果游戏提供 LAN 模式，也可以选择 LAN 模式）。
+3. 连接到同一中继服务器的玩家会自动发现彼此。
 
-> **Nota:** Actualmente el sysmodule acepta IPs directas en la configuracion del relay.
-> El soporte de hostnames (ej: `tekn0.net:11451`) esta pendiente de verificacion en Switch.
-
----
-
-## Componentes del proyecto
-
-| Directorio | Descripcion |
-|------------|-------------|
-| `sysmodule/` | Sysmodule principal (Title ID `42000000000000B1`). LDN bridge, relay client, IP virtual. |
-| `ldn_mitm-1.25.1/` | Fork modificado de ldn_mitm v1.25.1. Intercepta LDN -> LAN. **Modificado**: TCP connect via relay proxy `127.0.0.1:11453` para IPs virtuales. |
-| `hbapp/` | App homebrew "LanPlay Setup" para configurar el relay desde la Switch. |
-| `server/` | Servidor relay UDP en Node.js/TypeScript. |
-| `all_in_one/` | Paquete listo para SD con todos los binarios compilados. |
-| `tools/` | Herramientas de desarrollo: `pc-peer.ts` (peer de prueba), `decode_scanresp.js` (decodificador de payloads LDN). |
-| `src/` | Cliente PC original (captura paquetes con libpcap). |
-| `lwip/` | Stack TCP/IP ligero (usado por el cliente PC). |
-
-### Versiones actuales
-
-| Componente | Version | Title ID |
-|------------|---------|----------|
-| Sysmodule lan-play | v1.15 | `42000000000000B1` |
-| ldn_mitm (modificado) | v1.25.1 | `4200000000000010` |
-| Atmosphere requerido | >= 1.11.0 | -- |
+> **注意：**目前可在 sysmodule 的中继配置中使用 IP 地址。主机名（例如 `tekn0.net:11451`）在 Switch 上的支持情况仍待验证。
 
 ---
 
-## Servidor relay
+## 项目组件
 
-El servidor escucha en el puerto `11451/UDP` y reenvia paquetes entre todas las consolas conectadas.
+| 目录 | 说明 |
+|------|------|
+| `sysmodule/` | 主 sysmodule（Title ID `42000000000000B1`）：LDN 桥接、中继客户端和虚拟 IP。 |
+| `ldn_mitm-1.25.1/` | 修改后的 ldn_mitm v1.25.1 分支，将 LDN 转换为 LAN。**本项目的修改：**访问虚拟 IP 时，通过中继代理 `127.0.0.1:11453` 建立 TCP 连接。 |
+| `hbapp/` | 在 Switch 上配置中继服务器的 LanPlay Setup 自制程序。 |
+| `server/` | 基于 Node.js/TypeScript 的 UDP 中继服务器。 |
+| `all_in_one/` | 包含已编译二进制文件、可直接复制到 SD 卡的整合包。 |
+| `tools/` | 开发工具：`pc-peer.ts`（测试节点）、`decode_scanresp.js`（LDN 载荷解码器）。 |
+| `src/` | 原版 PC 客户端（通过 libpcap 捕获数据包）。 |
+| `lwip/` | 轻量级 TCP/IP 协议栈，供 PC 客户端使用。 |
 
-### Docker (recomendado)
+### 当前版本
+
+| 组件 | 版本 | Title ID |
+|------|------|----------|
+| lan-play sysmodule | v1.15 | `42000000000000B1` |
+| ldn_mitm（修改版） | v1.25.1 | `4200000000000010` |
+| Atmosphere 最低要求 | ≥ 1.11.0 | — |
+
+---
+
+## 中继服务器
+
+服务器监听 `11451/UDP`，在所有已连接的主机之间转发数据包。
+
+### Docker（推荐）
 
 ```sh
 cd server
 docker compose up -d
 ```
 
-### Node.js directo
+### 直接使用 Node.js
 
 ```sh
 cd server
@@ -158,96 +157,97 @@ npm run build
 npm start
 ```
 
-Opciones:
+可用参数：
 
-| Parametro | Descripcion |
-|-----------|-------------|
-| `--port 11451` | Puerto UDP (por defecto `11451`) |
-| `--simpleAuth usuario:clave` | Autenticacion basica |
-| `--jsonAuth ./users.json` | Autenticacion por archivo JSON |
+| 参数 | 说明 |
+|------|------|
+| `--port 11451` | UDP 端口（默认 `11451`） |
+| `--simpleAuth 用户名:密码` | 基本身份验证 |
+| `--jsonAuth ./users.json` | 使用 JSON 文件进行身份验证 |
 
-### Monitor de estado
+### 状态监控
 
+```text
+GET http://服务器IP:11451/info
+→ { "online": 5 }
 ```
-GET http://TU_IP:11451/info
--> { "online": 5 }
-```
 
-### Puertos requeridos
+### 所需端口
 
-| Puerto | Protocolo | Uso |
-|--------|-----------|-----|
-| 11451 | **UDP** | Relay de paquetes LAN (**obligatorio**) |
-| 11451 | TCP | API de estado (opcional) |
+| 端口 | 协议 | 用途 |
+|------|------|------|
+| 11451 | **UDP** | 转发 LAN 数据包（**必需**） |
+| 11451 | TCP | 状态 API（可选） |
 
-### Hosting gratuito
+### 免费托管
 
-Ver [server/README.md](server/README.md) para guias de despliegue en Oracle Cloud, fly.io, Railway, etc.
+Oracle Cloud、fly.io、Railway 等平台的部署指南见 [server/README.md](server/README.md)。
 
 ---
 
-## Herramientas de desarrollo
+## 开发工具
 
-### pc-peer.ts — Peer de prueba desde PC
+### pc-peer.ts：PC 测试节点
 
-Conecta tu PC al relay como un peer virtual para probar Scan/ScanResp sin necesidad de dos consolas.
+让 PC 作为虚拟节点连接中继服务器，无需两台 Switch 即可测试 Scan/ScanResp。
 
 ```sh
 cd server && npm install && cd ..
-npx --prefix ./server ts-node --project ./server/tsconfig.json ./tools/pc-peer.ts <relay> <port> <virtualIP>
+npx --prefix ./server ts-node --project ./server/tsconfig.json ./tools/pc-peer.ts <中继服务器> <端口> <虚拟IP>
 ```
 
-Comandos disponibles en la consola interactiva:
-- `scan` — Envia un LDN Scan broadcast
-- `autoscan [ms]` — Escaneo automatico cada N milisegundos
-- `stopscan` — Detener autoscan
-- `ping <ip>` — Ping a un peer virtual
-- `stats` — Mostrar estadisticas
-- `quit` — Salir
+交互式控制台命令：
 
-### decode_scanresp.js — Decodificador de payloads
+- `scan`：发送 LDN Scan 广播。
+- `autoscan [ms]`：每隔指定毫秒数自动扫描。
+- `stopscan`：停止自动扫描。
+- `ping <ip>`：向虚拟节点发送 ping。
+- `stats`：显示统计信息。
+- `quit`：退出。
+
+### decode_scanresp.js：载荷解码器
 
 ```sh
 node tools/decode_scanresp.js
 ```
 
-Muestra un volcado hex+ASCII del payload ScanResp para analisis visual.
+输出 ScanResp 载荷的十六进制和 ASCII 对照内容，便于查看。
 
 ---
 
-## Compilacion desde fuente
+## 从源码编译
 
-### Sysmodule (Switch)
+### Sysmodule（Switch）
 
-Requiere **devkitPro** con soporte Switch:
+需要支持 Switch 开发的 **devkitPro**：
 
 ```sh
 dkp-pacman -S switch-dev switch-atmo-tools
 
 cd sysmodule
 make
-# Resultado: atmosphere/ -> copiar a la raiz de la SD
+# 生成的 atmosphere/ 目录复制到 SD 卡根目录
 ```
 
-### ldn_mitm (Switch)
+### ldn_mitm（Switch）
 
 ```sh
 cd ldn_mitm-1.25.1
 git submodule update --init --recursive
 make
-# O con Docker:
+# 也可以使用 Docker：
 docker-compose up --build
 ```
 
-### App configuradora homebrew
+### Homebrew 配置应用
 
 ```sh
 cd hbapp
 make
-# Resultado: lanplay-setup.nro -> sdmc:/switch/lan-play/
+# 生成的 lanplay-setup.nro 复制到 sdmc:/switch/lan-play/
 ```
 
-### Cliente PC (alternativo)
+### PC 客户端（可选）
 
 ```sh
 mkdir build && cd build
@@ -255,59 +255,59 @@ cmake ..
 make
 ```
 
-Requiere `libpcap-dev` (Linux), `npcap` (Windows) o `libpcap` (macOS).
+需要 `libpcap-dev`（Linux）、`npcap`（Windows）或 `libpcap`（macOS）。
 
-#### Windows (MSYS2/MinGW)
+#### Windows（MSYS2/MinGW）
 
-1. Instala **MSYS2** y abre `MSYS2 MinGW 64-bit`.
-2. Instala toolchain y utilidades:
+1. 安装 **MSYS2**，打开 `MSYS2 MinGW 64-bit`。
+2. 安装工具链及相关工具：
 
-```sh
-pacman -S --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make git
-```
+   ```sh
+   pacman -S --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make git
+   ```
 
-3. Asegurate de que `C:\msys64\mingw64\bin` este en `PATH`.
-4. Desde PowerShell en la raiz del repo:
+3. 确保 `C:\msys64\mingw64\bin` 位于 `PATH` 中。
+4. 在仓库根目录的 PowerShell 中运行：
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\build_pc_windows_mingw.ps1 -BuildDir build -Config Release
-```
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\tools\build_pc_windows_mingw.ps1 -BuildDir build -Config Release
+   ```
 
-Si el repo viene desde un ZIP sin `.git`, CMake descargara automaticamente `libuv` y `uvw` durante la configuracion.
+如果仓库来自不含 `.git` 目录的 ZIP 文件，CMake 会在配置时自动下载 `libuv` 和 `uvw`。
 
 ---
 
-## Configuracion avanzada
+## 高级配置
 
-### Archivo de configuracion
+### 配置文件
 
-Ubicacion: `sdmc:/config/lan-play/config.ini`
+位置：`sdmc:/config/lan-play/config.ini`
 
 ```ini
 [server]
 relay_addr = 192.168.1.100:11451
 
-; Opcional: fijar IP virtual (por defecto se genera del numero de serie)
+; 可选：指定虚拟 IP（默认根据设备序列号生成）
 ; ip = 10.13.5.10
 
-; Opcional: autenticacion
-; username = miusuario
-; password = miclave
+; 可选：身份验证
+; username = myuser
+; password = mypassword
 ```
 
-### IP virtual automatica
+### 自动分配虚拟 IP
 
-Cada Switch obtiene una IP determinista en `10.13.1.1-10.13.254.254` derivada de su numero de serie. No requiere DHCP ni configuracion manual.
+每台 Switch 都会根据序列号，在 `10.13.1.1-10.13.254.254` 范围内获得固定的虚拟 IP，无需 DHCP 或手动配置。
 
-### Overlay Tesla (ldn_mitm)
+### Tesla 悬浮菜单（ldn_mitm）
 
-Si tienes Tesla Menu instalado, el overlay `ldnmitm_config.ovl` permite activar/desactivar ldn_mitm en tiempo real sin reiniciar.
+如果安装了 Tesla Menu，可以通过 `ldnmitm_config.ovl` 悬浮菜单实时启用或禁用 ldn_mitm，无需重启。
 
 ---
 
-## Protocolo
+## 协议
 
-### Relay (puerto 11451)
+### 中继协议（端口 11451）
 
 ```c
 struct packet {
@@ -316,54 +316,54 @@ struct packet {
 };
 ```
 
-### LDN (puerto 11452)
+### LDN（端口 11452）
 
 ```c
 struct ldn_header {
     uint32_t magic;             // 0x11451400
     uint8_t  type;              // 0=Scan, 1=ScanResp, 2=Connect, 3=SyncNetwork
     uint8_t  compressed;
-    uint16_t length;            // tamano del body
+    uint16_t length;            // 数据体长度
     uint16_t decompress_length;
     uint8_t  reserved[2];
 };
-// Seguido de NetworkInfo (para ScanResp/SyncNetwork) o vacio (para Scan)
+// 后续为 NetworkInfo（ScanResp/SyncNetwork）或空数据（Scan）
 ```
 
 ---
 
-## Caracteristicas tecnicas
+## 技术特性
 
-- **LDN Bridge**: Modulo que captura trafico LDN de ldn_mitm y lo envia al relay con reescritura de IPs (ALG)
-- **Inyeccion por loopback**: Usa `127.0.0.1:11452` en vez de broadcast, compatible con Horizon OS que no loopea broadcasts
-- **TCP Proxy**: Puerto 11453 tunnela conexiones TCP Station->AP a traves del relay
-- **Bypass DNS (inet_pton)**: Si usas una IP directa, se salta la resolucion DNS de Nintendo evitando el error "System Busy"
-- **Thread Spoofing**: Clona dinamicamente permisos de hilo para evitar crashes por restricciones de CPU de Atmosphere
-- **IP determinista**: Derivada del numero de serie de hardware, inmutable sin DHCP
-
----
-
-## Solucion de problemas
-
-| Sintoma | Que revisar |
-|---------|-------------|
-| Sysmodule no arranca | Verifica Atmosphere >= 1.11.0; comprueba que `boot2.flag` existe en ambos Title IDs |
-| No ve salas de otros jugadores | Verifica que ambos jugadores usan el mismo relay; el juego debe estar en modo "inalambrico local" |
-| "LanPlay Setup" no aparece en hbmenu | Verifica NRO en `sdmc:/switch/lan-play/lanplay-setup.nro` |
-| Error de conexion al relay | Verifica que el puerto 11451/UDP esta abierto en el firewall del servidor |
-| ldn_mitm no intercepta el juego | Verifica que `4200000000000010` tiene `boot2.flag`; reinicia la Switch |
-| Latencia alta | Usa un relay geograficamente cercano a todos los jugadores |
+- **LDN Bridge**：捕获 ldn_mitm 的 LDN 流量，重写 IP（ALG）后发送到中继服务器。
+- **Loopback 注入**：使用 `127.0.0.1:11452` 代替广播，兼容不会将广播回送到本机的 Horizon OS。
+- **TCP 代理**：通过端口 11453 和中继服务器转发 Station → AP TCP 连接。
+- **DNS 绕过（inet_pton）**：使用 IP 地址时跳过 Nintendo DNS 解析，避免出现“System Busy”错误。
+- **线程权限模拟**：动态复制线程权限，避免 Atmosphere 的 CPU 限制导致崩溃。
+- **固定虚拟 IP**：根据设备序列号生成，无需 DHCP。
 
 ---
 
-## Licencia
+## 故障排查
+
+| 现象 | 排查方法 |
+|------|----------|
+| Sysmodule 无法启动 | 确认 Atmosphere ≥ 1.11.0，并检查两个 Title ID 对应目录中是否都有 `boot2.flag`。 |
+| 看不到其他玩家的房间 | 确认双方连接到同一中继服务器，且游戏已进入“本地无线联机”模式。 |
+| Homebrew Menu 中找不到 LanPlay Setup | 检查 `sdmc:/switch/lan-play/lanplay-setup.nro` 是否存在。 |
+| 无法连接中继服务器 | 检查服务器防火墙是否放行 `11451/UDP`。 |
+| ldn_mitm 没有拦截游戏 | 检查 `4200000000000010` 目录中是否有 `boot2.flag`，然后重启 Switch。 |
+| 延迟较高 | 选择地理位置靠近所有玩家的中继服务器。 |
+
+---
+
+## 许可证
 
 [MIT](LICENSE.txt)
 
 ---
 
-## Creditos
+## 致谢
 
-- [spacemeowx2/switch-lan-play](https://github.com/spacemeowx2/switch-lan-play) — Proyecto original
-- [spacemeowx2/ldn_mitm](https://github.com/spacemeowx2/ldn_mitm) — ldn_mitm original
-- [Atmosphere-NX](https://github.com/Atmosphere-NX/Atmosphere) — CFW para Nintendo Switch
+- [spacemeowx2/switch-lan-play](https://github.com/spacemeowx2/switch-lan-play)：原项目。
+- [spacemeowx2/ldn_mitm](https://github.com/spacemeowx2/ldn_mitm)：原版 ldn_mitm。
+- [Atmosphere-NX](https://github.com/Atmosphere-NX/Atmosphere)：Nintendo Switch 自定义固件。

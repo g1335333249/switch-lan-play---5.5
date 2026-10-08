@@ -2,7 +2,7 @@
 [![Build status](https://github.com/shaklinedj/switch-lan-play---5.5/workflows/Build/badge.svg)](https://github.com/shaklinedj/switch-lan-play---5.5/actions?query=workflow%3ABuild)
 [![Chat on discord](https://img.shields.io/badge/chat-on%20discord-7289da.svg)](https://discord.gg/zEMCu5n)
 
-[English](README.md) | 中文
+> 本文件记录旧版 PC 客户端的用法。当前 Switch 双 sysmodule 方案请阅读 [主 README](README.md)。
 
 Switch 虚拟局域网联机工具，能让你和远方的朋友像在局域网里一样联机。
 
